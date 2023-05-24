@@ -1,0 +1,245 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "mysql"
+  url      = env("DATABASE_URL")
+}
+
+model Player {
+  id               String              @id
+  handle           String
+  email            String
+  profileImageUrl  String              @db.VarChar(768)
+  createdAt        DateTime            @default(now())
+  updatedAt        DateTime            @default(now())
+  notifications    Notification[]
+  aSideFriends     Friendship[]        @relation("aSideFriendship")
+  bSideFriends     Friendship[]        @relation("bSideFriendship")
+  obFriendRequests FriendshipRequest[] @relation("friendshipRequester")
+  ibFriendRequests FriendshipRequest[] @relation("friendshipAddressee")
+  adminOf          GroupAdmin[]
+  ownerOf          GameRoom[]          @relation("GameRoomOwner")
+  groups           GroupMember[]
+  gameRooms        GameRoomPlayer[]
+}
+
+model Notification {
+  id        Int      @id @default(autoincrement())
+  createdAt DateTime @default(now())
+  player    Player   @relation(fields: [playerId], references: [id])
+  playerId  String
+  isNew     Boolean
+  text      String   @db.Text
+}
+
+model FriendshipRequest {
+  requester   Player   @relation("friendshipRequester", fields: [requesterId], references: [id])
+  requesterId String
+  addressee   Player   @relation("friendshipAddressee", fields: [addresseeId], references: [id])
+  addresseeId String
+  createdAt   DateTime @default(now())
+
+  @@id([requesterId, addresseeId])
+}
+
+model Friendship {
+  playerA   Player   @relation("aSideFriendship", fields: [playerAId], references: [id])
+  playerAId String
+  playerB   Player   @relation("bSideFriendship", fields: [playerBId], references: [id])
+  playerBId String
+  createdAt DateTime @default(now())
+
+  @@id([playerAId, playerBId])
+}
+
+model Group {
+  id        Int           @id @default(autoincrement())
+  createdAt DateTime      @default(now())
+  updatedAt DateTime      @default(now())
+  handle    String
+  members   GroupMember[]
+  admins    GroupAdmin[]
+  gameRooms GameRoom[]
+}
+
+model GroupMember {
+  player    Player   @relation(fields: [playerId], references: [id])
+  playerId  String
+  group     Group    @relation(fields: [groupId], references: [id])
+  groupId   Int
+  createdAt DateTime @default(now())
+
+  @@id([playerId, groupId])
+}
+
+model GroupAdmin {
+  player    Player   @relation(fields: [playerId], references: [id])
+  playerId  String
+  group     Group    @relation(fields: [groupId], references: [id])
+  groupId   Int
+  createdAt DateTime @default(now())
+
+  @@id([playerId, groupId])
+}
+
+model GameRoom {
+  id        Int              @id @default(autoincrement())
+  createdAt DateTime         @default(now())
+  owner     Player           @relation("GameRoomOwner", fields: [ownerId], references: [id])
+  ownerId   String
+  players   GameRoomPlayer[]
+  group     Group            @relation(fields: [groupId], references: [id])
+  groupId   Int
+  games     Game[]
+}
+
+model GameRoomPlayer {
+  id         Int      @id @default(autoincrement())
+  player     Player   @relation(fields: [playerId], references: [id])
+  playerId   String
+  gameRoom   GameRoom @relation(fields: [gameRoomId], references: [id])
+  gameRoomId Int
+  isAuthed   Boolean  @default(false)
+  isGhost    Boolean  @default(false)
+
+  // Guest players will be linked to a global
+  // guest player id (probably 0) via the
+  // 'player' field. While checking for
+  // this id could be used to implicitly identify
+  // guest players, the 'isGuest' field
+  // makes this explicit and easier to
+  // see in a query
+  isGuest     Boolean @default(false)
+  guestHandle String
+
+  usedIn GamePlayer[]
+  turns  Turn[]
+
+  @@unique([playerId, gameRoomId])
+}
+
+model GameType {
+  id   Int    @id @default(autoincrement())
+  name String @unique
+
+  // Description could be long, so use
+  // a TEXT column rather than the default
+  // VARCHAR for this
+  description String @db.Text
+
+  // This field contains the complete rules
+  // for playing this game type. It can
+  // contain markdown.
+  // This field could be long, so use
+  // a TEXT column rather than the default
+  // VARCHAR for this
+  rules String @db.Text
+
+  gameOptions GameTypeOption[]
+  usedIn      Game[]
+}
+
+model GameTypeOption {
+  gameType   GameType @relation(fields: [gameTypeId], references: [id])
+  gameTypeId Int
+  name       String
+
+  // Description could be long, so use
+  // a TEXT column rather than the default
+  // VARCHAR for this
+  description String @db.Text
+
+  // This field contains a JSON object
+  // defining the valid values this
+  // option can be set to.
+  // This field could be long, so use
+  // a TEXT column rather than the
+  // default VARCHAR
+  validValuesJSON String @db.Text
+
+  // This field contains a JSON object
+  // defining the default value of the
+  // option.
+  // This field could be long, so use
+  // a TEXT column rather than the
+  // default VARCHAR
+  dataDefaultJSON String @db.Text
+
+  // Option names must be unique with respect
+  // to a game type
+  @@id([gameTypeId, name])
+}
+
+model Game {
+  id         Int           @id @default(autoincrement())
+  gameRoom   GameRoom      @relation(fields: [gameRoomId], references: [id])
+  gameRoomId Int
+  gameType   GameType      @relation(fields: [gameTypeId], references: [id])
+  gameTypeId Int
+  players    GamePlayer[]
+  options    GameOptions[]
+  turns      Turn[]
+}
+
+model GamePlayer {
+  gameRoomPlayer   GameRoomPlayer @relation(fields: [gameRoomPlayerId], references: [id])
+  gameRoomPlayerId Int
+  game             Game           @relation(fields: [gameId], references: [id])
+  gameId           Int
+  playerIdx        Int
+  teamNum          Int?
+
+  @@id([gameRoomPlayerId, gameId])
+  // Player index (turn order) must be
+  // unique within a game
+  @@unique([gameId, playerIdx])
+}
+
+model GameOptions {
+  game           Game   @relation(fields: [gameId], references: [id])
+  gameId         Int
+  gameOptionName String @unique
+
+  // This field contains a JSON object
+  // defining the value of the option.
+  // This field could be long, so use
+  // a TEXT column rather than the
+  // default VARCHAR
+  optionDataJSON String @db.Text
+}
+
+model Turn {
+  game             Game           @relation(fields: [gameId], references: [id])
+  gameId           Int
+  turnIdx          Int
+  gameRoomPlayer   GameRoomPlayer @relation(fields: [gameRoomPlayerId], references: [id])
+  gameRoomPlayerId Int
+  dartHits         DartHit[]
+
+  // Turn indexes must be unique
+  // within a game
+  @@unique([gameId, turnIdx])
+}
+
+model DartHit {
+  turn    Turn @relation(fields: [gameId, turnIdx], references: [gameId, turnIdx])
+  gameId  Int
+  turnIdx Int
+
+  isDouble    Boolean @default(false)
+  isTriple    Boolean @default(false)
+  isMiss      Boolean @default(false)
+  isBounceOut Boolean @default(false)
+
+  // Only needs to be a short string,
+  // so override default VARCHAR to
+  // VARCHAR(5)
+  scoreArea String @db.VarChar(5)
+
+  @@id([gameId, turnIdx])
+}
