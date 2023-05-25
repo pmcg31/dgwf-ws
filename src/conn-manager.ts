@@ -16,33 +16,29 @@ type QueryMapValue = {
 
 const connectionMap = new Map<ws.WebSocket, ConnMapValue>();
 
-function updatePlayerOnlineStatus(
+async function updatePlayerOnlineStatus(
   playerId: string,
   isOnline: boolean
 ): Promise<void> {
-  return new Promise<void>((resolve, reject) => {
-    try {
-      // Update the database
-      prisma.player.update({
-        where: { id: playerId },
-        data: { isOnline, updatedAt: new Date() }
-      });
+  try {
+    // Update the database
+    await prisma.player.update({
+      where: { id: playerId },
+      data: { isOnline, updatedAt: new Date() }
+    });
 
-      // Notify connected sockets
-      const msg = JSON.stringify({ mutation: 'updatePlayer' });
-      for (const ws of connectionMap.keys()) {
-        const tmp = connectionMap.get(ws);
-        if (tmp) {
-          console.log(`${tmp.remoteAddress}[${tmp.remotePort}] ===> ${msg}`);
-        }
-        ws.send(msg);
+    // Notify connected sockets
+    const msg = JSON.stringify({ mutation: 'updatePlayer' });
+    for (const ws of connectionMap.keys()) {
+      const tmp = connectionMap.get(ws);
+      if (tmp) {
+        console.log(`${tmp.remoteAddress}[${tmp.remotePort}] ===> ${msg}`);
       }
-
-      resolve();
-    } catch (error) {
-      reject();
+      ws.send(msg);
     }
-  });
+  } catch (error) {
+    console.log(`updatePlayerOnlineStatus: error: ${JSON.stringify(error)}`);
+  }
 }
 
 function handleMessage(e: ws.MessageEvent) {
