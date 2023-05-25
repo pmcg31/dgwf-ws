@@ -1,4 +1,7 @@
 import * as ws from 'ws';
+import { PrismaClient } from '@prisma/client';
+
+const prisma = new PrismaClient();
 
 type ConnMapValue = {
   remoteAddress: string;
@@ -13,6 +16,35 @@ type QueryMapValue = {
 
 const connectionMap = new Map<ws.WebSocket, ConnMapValue>();
 
+function updatePlayerOnlineStatus(
+  playerId: string,
+  isOnline: boolean
+): Promise<void> {
+  return new Promise<void>((resolve, reject) => {
+    try {
+      // Update the database
+      prisma.player.update({
+        where: { id: playerId },
+        data: { isOnline, updatedAt: new Date() }
+      });
+
+      // Notify connected sockets
+      const msg = JSON.stringify({ mutation: 'updatePlayer' });
+      for (const ws of connectionMap.keys()) {
+        const tmp = connectionMap.get(ws);
+        if (tmp) {
+          console.log(`${tmp.remoteAddress}[${tmp.remotePort}] ===> ${msg}`);
+        }
+        ws.send(msg);
+      }
+
+      resolve();
+    } catch (error) {
+      reject();
+    }
+  });
+}
+
 function handleMessage(e: ws.MessageEvent) {
   const conn = connectionMap.get(e.target);
   if (conn) {
@@ -22,12 +54,14 @@ function handleMessage(e: ws.MessageEvent) {
         console.log(
           `${conn.remoteAddress}[${conn.remotePort}] Player offline: ${conn.playerId}`
         );
+        updatePlayerOnlineStatus(conn.playerId, false);
       }
       conn.playerId = data.playerId;
       if (conn.playerId) {
         console.log(
           `${conn.remoteAddress}[${conn.remotePort}] Player online: ${data.playerId}`
         );
+        updatePlayerOnlineStatus(conn.playerId, true);
       }
     } else if (Object.prototype.hasOwnProperty.call(data, 'usingQuery')) {
       console.log(
@@ -70,6 +104,7 @@ function handleClose(e: ws.CloseEvent) {
       console.log(
         `${conn.remoteAddress}[${conn.remotePort}] Player offline: ${conn.playerId}`
       );
+      updatePlayerOnlineStatus(conn.playerId, false);
     }
 
     // Remove all query map values using this

@@ -15,6 +15,7 @@ model Player {
   handle           String
   email            String
   profileImageUrl  String              @db.VarChar(768)
+  isOnline         Boolean             @default(false)
   createdAt        DateTime            @default(now())
   updatedAt        DateTime            @default(now())
   notifications    Notification[]
