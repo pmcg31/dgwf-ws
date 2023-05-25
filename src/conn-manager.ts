@@ -47,13 +47,17 @@ function handleMessage(e: ws.MessageEvent) {
           Object.keys(data.mutation)[0]
         }`
       );
+      // Forward to all connections
       const msg = JSON.stringify({ mutation: Object.keys(data.mutation)[0] });
       for (const ws of connectionMap.keys()) {
-        const tmp = connectionMap.get(ws);
-        if (tmp) {
-          console.log(`${tmp.remoteAddress}[${tmp.remotePort}] ===> ${msg}`);
+        // Don't send back to originator
+        if (ws !== e.target) {
+          const tmp = connectionMap.get(ws);
+          if (tmp) {
+            console.log(`${tmp.remoteAddress}[${tmp.remotePort}] ===> ${msg}`);
+          }
+          ws.send(msg);
         }
-        ws.send(msg);
       }
     }
   }
