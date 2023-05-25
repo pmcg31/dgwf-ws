@@ -37,7 +37,8 @@ async function updatePlayerOnlineStatus(
       ws.send(msg);
     }
   } catch (error) {
-    console.log(`updatePlayerOnlineStatus: error: ${JSON.stringify(error)}`);
+    console.log('updatePlayerOnlineStatus: error:');
+    console.log(error);
   }
 }
 
